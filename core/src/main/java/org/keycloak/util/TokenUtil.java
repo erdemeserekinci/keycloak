@@ -18,11 +18,7 @@
 package org.keycloak.util;
 
 import org.keycloak.OAuth2Constants;
-import org.keycloak.jose.jwe.JWE;
-import org.keycloak.jose.jwe.JWEConstants;
-import org.keycloak.jose.jwe.JWEException;
-import org.keycloak.jose.jwe.JWEHeader;
-import org.keycloak.jose.jwe.JWEKeyStorage;
+import org.keycloak.jose.jwe.*;
 import org.keycloak.jose.jwe.alg.JWEAlgorithmProvider;
 import org.keycloak.jose.jwe.enc.JWEEncryptionProvider;
 import org.keycloak.jose.jws.JWSInput;
@@ -38,172 +34,181 @@ import java.security.Key;
  */
 public class TokenUtil {
 
-    public static final String TOKEN_TYPE_BEARER = "Bearer";
+	public static final String TOKEN_TYPE_BEARER = "Bearer";
 
-    public static final String TOKEN_TYPE_KEYCLOAK_ID = "Serialized-ID";
+	public static final String TOKEN_TYPE_KEYCLOAK_ID = "Serialized-ID";
 
-    public static final String TOKEN_TYPE_ID = "ID";
+	public static final String TOKEN_TYPE_ID = "ID";
 
-    public static final String TOKEN_TYPE_REFRESH = "Refresh";
+	public static final String TOKEN_TYPE_REFRESH = "Refresh";
 
-    public static final String TOKEN_TYPE_OFFLINE = "Offline";
-
-
-    public static String attachOIDCScope(String scopeParam) {
-        if (scopeParam == null || scopeParam.isEmpty()) {
-            return OAuth2Constants.SCOPE_OPENID;
-        } else if (hasScope(scopeParam, OAuth2Constants.SCOPE_OPENID)) {
-            return scopeParam;
-        } else {
-            return OAuth2Constants.SCOPE_OPENID + " " + scopeParam;
-        }
-    }
-
-    public static boolean isOIDCRequest(String scopeParam) {
-        return hasScope(scopeParam, OAuth2Constants.SCOPE_OPENID);
-    }
-
-    public static boolean isOfflineTokenRequested(String scopeParam) {
-        return hasScope(scopeParam, OAuth2Constants.OFFLINE_ACCESS);
-    }
-
-    public static boolean hasScope(String scopeParam, String targetScope) {
-        if (scopeParam == null || targetScope == null) {
-            return false;
-        }
-
-        String[] scopes = scopeParam.split(" ");
-        for (String scope : scopes) {
-            if (targetScope.equals(scope)) {
-                return true;
-            }
-        }
-        return false;
-    }
+	public static final String TOKEN_TYPE_OFFLINE = "Offline";
 
 
-    public static boolean hasPrompt(String promptParam, String targetPrompt) {
-        if (promptParam == null || targetPrompt == null) {
-            return false;
-        }
+	public static String attachOIDCScope(String scopeParam) {
+		if (scopeParam == null || scopeParam.isEmpty()) {
+			return OAuth2Constants.SCOPE_OPENID;
+		} else {
+			return scopeParam;
+		}
+	}
 
-        String[] prompts = promptParam.split(" ");
-        for (String prompt : prompts) {
-            if (targetPrompt.equals(prompt)) {
-                return true;
-            }
-        }
-        return false;
-    }
+	public static boolean isOIDCRequest(String scopeParam) {
+		return hasScope(scopeParam, OAuth2Constants.SCOPE_OPENID);
+	}
 
+	public static boolean isOfflineTokenRequested(String scopeParam) {
+		return hasScope(scopeParam, OAuth2Constants.OFFLINE_ACCESS);
+	}
 
+	public static boolean hasScope(String scopeParam, String targetScope) {
+		if (scopeParam == null || targetScope == null) {
+			return false;
+		}
 
-    /**
-     * Return refresh token or offline token
-     *
-     * @param decodedToken
-     * @return
-     */
-    public static RefreshToken getRefreshToken(byte[] decodedToken) throws JWSInputException {
-        try {
-            return JsonSerialization.readValue(decodedToken, RefreshToken.class);
-        } catch (IOException e) {
-            throw new JWSInputException(e);
-        }
-    }
-
-    public static RefreshToken getRefreshToken(String refreshToken) throws JWSInputException {
-        byte[] encodedContent = new JWSInput(refreshToken).getContent();
-        return getRefreshToken(encodedContent);
-    }
-
-    /**
-     * Return true if given refreshToken represents offline token
-     *
-     * @param refreshToken
-     * @return
-     */
-    public static boolean isOfflineToken(String refreshToken) throws JWSInputException {
-        RefreshToken token = getRefreshToken(refreshToken);
-        return token.getType().equals(TOKEN_TYPE_OFFLINE);
-    }
+		String[] scopes = scopeParam.split(" ");
+		for (String scope : scopes) {
+			if (targetScope.equals(scope)) {
+				return true;
+			}
+		}
+		return false;
+	}
 
 
-    public static String jweDirectEncode(Key aesKey, Key hmacKey, JsonWebToken jwt) throws JWEException {
-        int keyLength = aesKey.getEncoded().length;
-        String encAlgorithm;
-        switch (keyLength) {
-            case 16: encAlgorithm = JWEConstants.A128CBC_HS256;
-                break;
-            case 24: encAlgorithm = JWEConstants.A192CBC_HS384;
-                break;
-            case 32: encAlgorithm = JWEConstants.A256CBC_HS512;
-                break;
-            default: throw new IllegalArgumentException("Bad size for Encryption key: " + aesKey + ". Valid sizes are 16, 24, 32.");
-        }
+	public static boolean hasPrompt(String promptParam, String targetPrompt) {
+		if (promptParam == null || targetPrompt == null) {
+			return false;
+		}
 
-        try {
-            byte[] contentBytes = JsonSerialization.writeValueAsBytes(jwt);
-
-            JWEHeader jweHeader = new JWEHeader(JWEConstants.DIR, encAlgorithm, null);
-            JWE jwe = new JWE()
-                    .header(jweHeader)
-                    .content(contentBytes);
-
-            jwe.getKeyStorage()
-                    .setCEKKey(aesKey, JWEKeyStorage.KeyUse.ENCRYPTION)
-                    .setCEKKey(hmacKey, JWEKeyStorage.KeyUse.SIGNATURE);
-
-            return jwe.encodeJwe();
-        } catch (IOException ioe) {
-            throw new JWEException(ioe);
-        }
-    }
+		String[] prompts = promptParam.split(" ");
+		for (String prompt : prompts) {
+			if (targetPrompt.equals(prompt)) {
+				return true;
+			}
+		}
+		return false;
+	}
 
 
-    public static <T extends JsonWebToken> T jweDirectVerifyAndDecode(Key aesKey, Key hmacKey, String jweStr, Class<T> expectedClass) throws JWEException {
-        JWE jwe = new JWE();
-        jwe.getKeyStorage()
-                .setCEKKey(aesKey, JWEKeyStorage.KeyUse.ENCRYPTION)
-                .setCEKKey(hmacKey, JWEKeyStorage.KeyUse.SIGNATURE);
+	/**
+	 * Return refresh token or offline token
+	 *
+	 * @param decodedToken
+	 * @return
+	 */
+	public static RefreshToken getRefreshToken(byte[] decodedToken) throws JWSInputException {
+		try {
+			return JsonSerialization.readValue(decodedToken, RefreshToken.class);
+		} catch (IOException e) {
+			throw new JWSInputException(e);
+		}
+	}
 
-        jwe.verifyAndDecodeJwe(jweStr);
+	public static RefreshToken getRefreshToken(String refreshToken) throws JWSInputException {
+		byte[] encodedContent = new JWSInput(refreshToken).getContent();
+		return getRefreshToken(encodedContent);
+	}
 
-        try {
-            return JsonSerialization.readValue(jwe.getContent(), expectedClass);
-        } catch (IOException ioe) {
-            throw new JWEException(ioe);
-        }
-    }
+	/**
+	 * Return true if given refreshToken represents offline token
+	 *
+	 * @param refreshToken
+	 * @return
+	 */
+	public static boolean isOfflineToken(String refreshToken) throws JWSInputException {
+		RefreshToken token = getRefreshToken(refreshToken);
+		return token.getType().equals(TOKEN_TYPE_OFFLINE);
+	}
 
-    public static String jweKeyEncryptionEncode(Key encryptionKEK, byte[] contentBytes, String algAlgorithm, String encAlgorithm, String kid, JWEAlgorithmProvider jweAlgorithmProvider, JWEEncryptionProvider jweEncryptionProvider) throws JWEException {
-        JWEHeader jweHeader = new JWEHeader(algAlgorithm, encAlgorithm, null, kid);
-        return jweKeyEncryptionEncode(encryptionKEK, contentBytes, jweHeader, jweAlgorithmProvider, jweEncryptionProvider);
-    }
 
-    private static String jweKeyEncryptionEncode(Key encryptionKEK, byte[] contentBytes, JWEHeader jweHeader, JWEAlgorithmProvider jweAlgorithmProvider, JWEEncryptionProvider jweEncryptionProvider) throws JWEException {
-        JWE jwe = new JWE()
-                .header(jweHeader)
-                .content(contentBytes);
-        jwe.getKeyStorage()
-                .setEncryptionKey(encryptionKEK);
-        String encodedContent = jwe.encodeJwe(jweAlgorithmProvider, jweEncryptionProvider);
-        return encodedContent;
-    }
+	public static String jweDirectEncode(Key aesKey, Key hmacKey, JsonWebToken jwt) throws JWEException {
+		int keyLength = aesKey.getEncoded().length;
+		String encAlgorithm;
+		switch (keyLength) {
+			case 16:
+				encAlgorithm = JWEConstants.A128CBC_HS256;
+				break;
+			case 24:
+				encAlgorithm = JWEConstants.A192CBC_HS384;
+				break;
+			case 32:
+				encAlgorithm = JWEConstants.A256CBC_HS512;
+				break;
+			default:
+				throw new IllegalArgumentException(
+						"Bad size for Encryption key: " + aesKey + ". Valid sizes are 16, 24, 32.");
+		}
 
-    public static byte[] jweKeyEncryptionVerifyAndDecode(Key decryptionKEK, String encodedContent) throws JWEException {
-        JWE jwe = new JWE();
-        jwe.getKeyStorage()
-            .setDecryptionKey(decryptionKEK);
-        jwe.verifyAndDecodeJwe(encodedContent);
-        return jwe.getContent();
-    }
+		try {
+			byte[] contentBytes = JsonSerialization.writeValueAsBytes(jwt);
 
-    public static byte[] jweKeyEncryptionVerifyAndDecode(Key decryptionKEK, String encodedContent, JWEAlgorithmProvider algorithmProvider, JWEEncryptionProvider encryptionProvider) throws JWEException {
-        JWE jwe = new JWE();
-        jwe.getKeyStorage()
-            .setDecryptionKey(decryptionKEK);
-        jwe.verifyAndDecodeJwe(encodedContent, algorithmProvider, encryptionProvider);
-        return jwe.getContent();
-    }
+			JWEHeader jweHeader = new JWEHeader(JWEConstants.DIR, encAlgorithm, null);
+			JWE jwe = new JWE()
+					.header(jweHeader)
+					.content(contentBytes);
+
+			jwe.getKeyStorage()
+					.setCEKKey(aesKey, JWEKeyStorage.KeyUse.ENCRYPTION)
+					.setCEKKey(hmacKey, JWEKeyStorage.KeyUse.SIGNATURE);
+
+			return jwe.encodeJwe();
+		} catch (IOException ioe) {
+			throw new JWEException(ioe);
+		}
+	}
+
+
+	public static <T extends JsonWebToken> T jweDirectVerifyAndDecode(Key aesKey, Key hmacKey, String jweStr,
+			Class<T> expectedClass) throws JWEException {
+		JWE jwe = new JWE();
+		jwe.getKeyStorage()
+				.setCEKKey(aesKey, JWEKeyStorage.KeyUse.ENCRYPTION)
+				.setCEKKey(hmacKey, JWEKeyStorage.KeyUse.SIGNATURE);
+
+		jwe.verifyAndDecodeJwe(jweStr);
+
+		try {
+			return JsonSerialization.readValue(jwe.getContent(), expectedClass);
+		} catch (IOException ioe) {
+			throw new JWEException(ioe);
+		}
+	}
+
+	public static String jweKeyEncryptionEncode(Key encryptionKEK, byte[] contentBytes, String algAlgorithm,
+			String encAlgorithm, String kid, JWEAlgorithmProvider jweAlgorithmProvider,
+			JWEEncryptionProvider jweEncryptionProvider) throws JWEException {
+		JWEHeader jweHeader = new JWEHeader(algAlgorithm, encAlgorithm, null, kid);
+		return jweKeyEncryptionEncode(encryptionKEK, contentBytes, jweHeader, jweAlgorithmProvider,
+				jweEncryptionProvider);
+	}
+
+	private static String jweKeyEncryptionEncode(Key encryptionKEK, byte[] contentBytes, JWEHeader jweHeader,
+			JWEAlgorithmProvider jweAlgorithmProvider, JWEEncryptionProvider jweEncryptionProvider) throws
+			JWEException {
+		JWE jwe = new JWE()
+				.header(jweHeader)
+				.content(contentBytes);
+		jwe.getKeyStorage()
+				.setEncryptionKey(encryptionKEK);
+		String encodedContent = jwe.encodeJwe(jweAlgorithmProvider, jweEncryptionProvider);
+		return encodedContent;
+	}
+
+	public static byte[] jweKeyEncryptionVerifyAndDecode(Key decryptionKEK, String encodedContent) throws JWEException {
+		JWE jwe = new JWE();
+		jwe.getKeyStorage()
+				.setDecryptionKey(decryptionKEK);
+		jwe.verifyAndDecodeJwe(encodedContent);
+		return jwe.getContent();
+	}
+
+	public static byte[] jweKeyEncryptionVerifyAndDecode(Key decryptionKEK, String encodedContent,
+			JWEAlgorithmProvider algorithmProvider, JWEEncryptionProvider encryptionProvider) throws JWEException {
+		JWE jwe = new JWE();
+		jwe.getKeyStorage()
+				.setDecryptionKey(decryptionKEK);
+		jwe.verifyAndDecodeJwe(encodedContent, algorithmProvider, encryptionProvider);
+		return jwe.getContent();
+	}
 }

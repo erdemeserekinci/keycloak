@@ -40,121 +40,138 @@ import java.util.Map;
  */
 public class IdpCreateUserIfUniqueAuthenticator extends AbstractIdpAuthenticator {
 
-    private static Logger logger = Logger.getLogger(IdpCreateUserIfUniqueAuthenticator.class);
+	private static Logger logger = Logger.getLogger(IdpCreateUserIfUniqueAuthenticator.class);
 
 
-    @Override
-    protected void actionImpl(AuthenticationFlowContext context, SerializedBrokeredIdentityContext serializedCtx, BrokeredIdentityContext brokerContext) {
-    }
+	@Override
+	protected void actionImpl(AuthenticationFlowContext context, SerializedBrokeredIdentityContext serializedCtx,
+			BrokeredIdentityContext brokerContext) {
+	}
 
-    @Override
-    protected void authenticateImpl(AuthenticationFlowContext context, SerializedBrokeredIdentityContext serializedCtx, BrokeredIdentityContext brokerContext) {
+	@Override
+	protected void authenticateImpl(AuthenticationFlowContext context, SerializedBrokeredIdentityContext serializedCtx,
+			BrokeredIdentityContext brokerContext) {
 
-        KeycloakSession session = context.getSession();
-        RealmModel realm = context.getRealm();
+		KeycloakSession session = context.getSession();
+		RealmModel realm = context.getRealm();
 
-        if (context.getAuthenticationSession().getAuthNote(EXISTING_USER_INFO) != null) {
-            context.attempted();
-            return;
-        }
+		if (context.getAuthenticationSession().getAuthNote(EXISTING_USER_INFO) != null) {
+			context.attempted();
+			return;
+		}
 
-        String username = getUsername(context, serializedCtx, brokerContext);
-        if (username == null) {
-            ServicesLogger.LOGGER.resetFlow(realm.isRegistrationEmailAsUsername() ? "Email" : "Username");
-            context.getAuthenticationSession().setAuthNote(ENFORCE_UPDATE_PROFILE, "true");
-            context.resetFlow();
-            return;
-        }
+		brokerContext.setModelUsername(brokerContext.getUsername());
+		logger.tracef("Linking federated user data: %s", brokerContext);
+		String username = getUsername(context, serializedCtx, brokerContext);
+		logger.debugf("Got username : \"%s\" on step: \"Create User if Unique\"", username);
+		if (username == null) {
+			ServicesLogger.LOGGER.resetFlow(realm.isRegistrationEmailAsUsername() ? "Email" : "Username");
+			context.getAuthenticationSession().setAuthNote(ENFORCE_UPDATE_PROFILE, "true");
+			context.resetFlow();
+			return;
+		}
 
-        ExistingUserInfo duplication = checkExistingUser(context, username, serializedCtx, brokerContext);
+		ExistingUserInfo duplication = checkExistingUser(context, username, serializedCtx, brokerContext);
+		logger.tracef("Got duplicated user info: %s", duplication);
+		if (duplication == null) {
+			logger.debugf(
+					"No duplication detected. Creating account for user '%s' and linking with identity provider '%s'" +
+							" .",
+					username, brokerContext.getIdpConfig().getAlias());
 
-        if (duplication == null) {
-            logger.debugf("No duplication detected. Creating account for user '%s' and linking with identity provider '%s' .",
-                    username, brokerContext.getIdpConfig().getAlias());
+			UserModel federatedUser = session.users().addUser(realm, username);
+			federatedUser.setEnabled(true);
+			federatedUser.setEmail(brokerContext.getEmail());
+			federatedUser.setFirstName(brokerContext.getFirstName());
+			federatedUser.setLastName(brokerContext.getLastName());
 
-            UserModel federatedUser = session.users().addUser(realm, username);
-            federatedUser.setEnabled(true);
-            federatedUser.setEmail(brokerContext.getEmail());
-            federatedUser.setFirstName(brokerContext.getFirstName());
-            federatedUser.setLastName(brokerContext.getLastName());
+			for (Map.Entry<String, List<String>> attr : serializedCtx.getAttributes().entrySet()) {
+				federatedUser.setAttribute(attr.getKey(), attr.getValue());
+			}
 
-            for (Map.Entry<String, List<String>> attr : serializedCtx.getAttributes().entrySet()) {
-                federatedUser.setAttribute(attr.getKey(), attr.getValue());
-            }
+			AuthenticatorConfigModel config = context.getAuthenticatorConfig();
+			if (config != null && Boolean.parseBoolean(config.getConfig()
+					.get(IdpCreateUserIfUniqueAuthenticatorFactory.REQUIRE_PASSWORD_UPDATE_AFTER_REGISTRATION))) {
+				logger.debugf("User '%s' required to update password", federatedUser.getUsername());
+				federatedUser.addRequiredAction(UserModel.RequiredAction.UPDATE_PASSWORD);
+			}
 
-            AuthenticatorConfigModel config = context.getAuthenticatorConfig();
-            if (config != null && Boolean.parseBoolean(config.getConfig().get(IdpCreateUserIfUniqueAuthenticatorFactory.REQUIRE_PASSWORD_UPDATE_AFTER_REGISTRATION))) {
-                logger.debugf("User '%s' required to update password", federatedUser.getUsername());
-                federatedUser.addRequiredAction(UserModel.RequiredAction.UPDATE_PASSWORD);
-            }
+			userRegisteredSuccess(context, federatedUser, serializedCtx, brokerContext);
 
-            userRegisteredSuccess(context, federatedUser, serializedCtx, brokerContext);
+			context.setUser(federatedUser);
+			context.getAuthenticationSession().setAuthNote(BROKER_REGISTERED_NEW_USER, "true");
+			context.success();
+		} else {
+			logger.debugf("Duplication detected. There is already existing user with %s '%s' .",
+					duplication.getDuplicateAttributeName(), duplication.getDuplicateAttributeValue());
 
-            context.setUser(federatedUser);
-            context.getAuthenticationSession().setAuthNote(BROKER_REGISTERED_NEW_USER, "true");
-            context.success();
-        } else {
-            logger.debugf("Duplication detected. There is already existing user with %s '%s' .",
-                    duplication.getDuplicateAttributeName(), duplication.getDuplicateAttributeValue());
+			// Set duplicated user, so next authenticators can deal with it
+			context.getAuthenticationSession().setAuthNote(EXISTING_USER_INFO, duplication.serialize());
+			//Only show error message if the authenticator was required
+			if (context.getExecution().isRequired()) {
+				Response challengeResponse = context.form()
+						.setError(Messages.FEDERATED_IDENTITY_EXISTS, duplication.getDuplicateAttributeName(),
+								duplication.getDuplicateAttributeValue())
+						.createErrorPage(Response.Status.CONFLICT);
+				context.challenge(challengeResponse);
+				context.getEvent()
+						.user(duplication.getExistingUserId())
+						.detail("existing_" + duplication.getDuplicateAttributeName(),
+								duplication.getDuplicateAttributeValue())
+						.removeDetail(Details.AUTH_METHOD)
+						.removeDetail(Details.AUTH_TYPE)
+						.error(Errors.FEDERATED_IDENTITY_EXISTS);
+			} else {
+				context.attempted();
+			}
+		}
+	}
 
-            // Set duplicated user, so next authenticators can deal with it
-            context.getAuthenticationSession().setAuthNote(EXISTING_USER_INFO, duplication.serialize());
-            //Only show error message if the authenticator was required
-            if (context.getExecution().isRequired()) {
-                Response challengeResponse = context.form()
-                        .setError(Messages.FEDERATED_IDENTITY_EXISTS, duplication.getDuplicateAttributeName(), duplication.getDuplicateAttributeValue())
-                        .createErrorPage(Response.Status.CONFLICT);
-                context.challenge(challengeResponse);
-                context.getEvent()
-                        .user(duplication.getExistingUserId())
-                        .detail("existing_" + duplication.getDuplicateAttributeName(), duplication.getDuplicateAttributeValue())
-                        .removeDetail(Details.AUTH_METHOD)
-                        .removeDetail(Details.AUTH_TYPE)
-                        .error(Errors.FEDERATED_IDENTITY_EXISTS);
-            } else {
-                context.attempted();
-            }
-        }
-    }
+	// Could be overriden to detect duplication based on other criterias (firstName, lastName, ...)
+	protected ExistingUserInfo checkExistingUser(AuthenticationFlowContext context, String username,
+			SerializedBrokeredIdentityContext serializedCtx, BrokeredIdentityContext brokerContext) {
 
-    // Could be overriden to detect duplication based on other criterias (firstName, lastName, ...)
-    protected ExistingUserInfo checkExistingUser(AuthenticationFlowContext context, String username, SerializedBrokeredIdentityContext serializedCtx, BrokeredIdentityContext brokerContext) {
+		if (brokerContext.getEmail() != null && !context.getRealm().isDuplicateEmailsAllowed()) {
+			UserModel existingUser = context.getSession().users()
+					.getUserByEmail(brokerContext.getEmail(), context.getRealm());
+			if (existingUser != null) {
+				return new ExistingUserInfo(existingUser.getId(), UserModel.EMAIL, existingUser.getEmail());
+			}
+		}
 
-        if (brokerContext.getEmail() != null && !context.getRealm().isDuplicateEmailsAllowed()) {
-            UserModel existingUser = context.getSession().users().getUserByEmail(brokerContext.getEmail(), context.getRealm());
-            if (existingUser != null) {
-                return new ExistingUserInfo(existingUser.getId(), UserModel.EMAIL, existingUser.getEmail());
-            }
-        }
+		UserModel existingUser = context.getSession().users().getUserByUsername(username, context.getRealm());
+		if (existingUser != null) {
+			return new ExistingUserInfo(existingUser.getId(), UserModel.USERNAME, existingUser.getUsername());
+		}
 
-        UserModel existingUser = context.getSession().users().getUserByUsername(username, context.getRealm());
-        if (existingUser != null) {
-            return new ExistingUserInfo(existingUser.getId(), UserModel.USERNAME, existingUser.getUsername());
-        }
+		return null;
+	}
 
-        return null;
-    }
-
-    protected String getUsername(AuthenticationFlowContext context, SerializedBrokeredIdentityContext serializedCtx, BrokeredIdentityContext brokerContext) {
-        RealmModel realm = context.getRealm();
-        return realm.isRegistrationEmailAsUsername() ? brokerContext.getEmail() : brokerContext.getModelUsername();
-    }
-
-
-    // Empty method by default. This exists, so subclass can override and add callback after new user is registered through social
-    protected void userRegisteredSuccess(AuthenticationFlowContext context, UserModel registeredUser, SerializedBrokeredIdentityContext serializedCtx, BrokeredIdentityContext brokerContext) {
-
-    }
+	protected String getUsername(AuthenticationFlowContext context, SerializedBrokeredIdentityContext serializedCtx,
+			BrokeredIdentityContext brokerContext) {
+		RealmModel realm = context.getRealm();
+		boolean registrationEmailAsUsername = realm.isRegistrationEmailAsUsername();
+		logger.tracef("Registration email as username: %s", registrationEmailAsUsername);
+		return registrationEmailAsUsername ? brokerContext.getEmail() : brokerContext.getModelUsername();
+	}
 
 
-    @Override
-    public boolean requiresUser() {
-        return false;
-    }
+	// Empty method by default. This exists, so subclass can override and add callback after new user is registered
+	// through social
+	protected void userRegisteredSuccess(AuthenticationFlowContext context, UserModel registeredUser,
+			SerializedBrokeredIdentityContext serializedCtx, BrokeredIdentityContext brokerContext) {
 
-    @Override
-    public boolean configuredFor(KeycloakSession session, RealmModel realm, UserModel user) {
-        return true;
-    }
+	}
+
+
+	@Override
+	public boolean requiresUser() {
+		return false;
+	}
+
+	@Override
+	public boolean configuredFor(KeycloakSession session, RealmModel realm, UserModel user) {
+		return true;
+	}
 
 }

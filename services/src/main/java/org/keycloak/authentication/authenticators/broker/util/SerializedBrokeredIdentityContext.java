@@ -18,17 +18,14 @@
 package org.keycloak.authentication.authenticators.broker.util;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import org.jboss.logging.Logger;
 import org.keycloak.authentication.requiredactions.util.UpdateProfileContext;
 import org.keycloak.broker.provider.BrokeredIdentityContext;
 import org.keycloak.broker.provider.IdentityProvider;
 import org.keycloak.broker.provider.IdentityProviderDataMarshaller;
 import org.keycloak.common.util.Base64Url;
 import org.keycloak.common.util.reflections.Reflections;
-import org.keycloak.models.Constants;
-import org.keycloak.models.IdentityProviderModel;
-import org.keycloak.models.KeycloakSession;
-import org.keycloak.models.ModelException;
-import org.keycloak.models.RealmModel;
+import org.keycloak.models.*;
 import org.keycloak.services.resources.IdentityBrokerService;
 import org.keycloak.sessions.AuthenticationSessionModel;
 import org.keycloak.util.JsonSerialization;
@@ -43,327 +40,333 @@ import java.util.Map;
  * @author <a href="mailto:mposolda@redhat.com">Marek Posolda</a>
  */
 public class SerializedBrokeredIdentityContext implements UpdateProfileContext {
+	protected static final Logger logger = Logger.getLogger(SerializedBrokeredIdentityContext.class);
 
-    private String id;
-    private String brokerUsername;
-    private String modelUsername;
-    private String email;
-    private String firstName;
-    private String lastName;
-    private String brokerSessionId;
-    private String brokerUserId;
-    private String code;
-    private String token;
+	private String id;
+	private String brokerUsername;
+	private String modelUsername;
+	private String email;
+	private String firstName;
+	private String lastName;
+	private String brokerSessionId;
+	private String brokerUserId;
+	private String code;
+	private String token;
 
-    @JsonIgnore
-    private boolean emailAsUsername;
+	@JsonIgnore
+	private boolean emailAsUsername;
 
-    private String identityProviderId;
-    private Map<String, ContextDataEntry> contextData = new HashMap<>();
+	private String identityProviderId;
+	private Map<String, ContextDataEntry> contextData = new HashMap<>();
 
-    @JsonIgnore
-    @Override
-    public boolean isEditUsernameAllowed() {
-        return !emailAsUsername;
-    }
+	@JsonIgnore
+	@Override
+	public boolean isEditUsernameAllowed() {
+		return !emailAsUsername;
+	}
 
-    public String getId() {
-        return id;
-    }
+	public String getId() {
+		return id;
+	}
 
-    public void setId(String id) {
-        this.id = id;
-    }
+	public void setId(String id) {
+		this.id = id;
+	}
 
-    @JsonIgnore
-    @Override
-    public String getUsername() {
-        return modelUsername;
-    }
+	@JsonIgnore
+	@Override
+	public String getUsername() {
+		return modelUsername;
+	}
 
-    @Override
-    public void setUsername(String username) {
-        this.modelUsername = username;
-    }
+	@Override
+	public void setUsername(String username) {
+		this.modelUsername = username;
+	}
 
-    public String getModelUsername() {
-        return modelUsername;
-    }
+	public String getModelUsername() {
+		return modelUsername;
+	}
 
-    public void setModelUsername(String modelUsername) {
-        this.modelUsername = modelUsername;
-    }
+	public void setModelUsername(String modelUsername) {
+		this.modelUsername = modelUsername;
+	}
 
-    public String getBrokerUsername() {
-        return brokerUsername;
-    }
+	public String getBrokerUsername() {
+		return brokerUsername;
+	}
 
-    public void setBrokerUsername(String modelUsername) {
-        this.brokerUsername = modelUsername;
-    }
+	public void setBrokerUsername(String modelUsername) {
+		this.brokerUsername = modelUsername;
+	}
 
-    @Override
-    public String getEmail() {
-        return email;
-    }
+	@Override
+	public String getEmail() {
+		return email;
+	}
 
-    @Override
-    public void setEmail(String email) {
-        this.email = email;
-    }
+	@Override
+	public void setEmail(String email) {
+		this.email = email;
+	}
 
-    @Override
-    public String getFirstName() {
-        return firstName;
-    }
+	@Override
+	public String getFirstName() {
+		return firstName;
+	}
 
-    @Override
-    public void setFirstName(String firstName) {
-        this.firstName = firstName;
-    }
+	@Override
+	public void setFirstName(String firstName) {
+		this.firstName = firstName;
+	}
 
-    @Override
-    public String getLastName() {
-        return lastName;
-    }
+	@Override
+	public String getLastName() {
+		return lastName;
+	}
 
-    @Override
-    public void setLastName(String lastName) {
-        this.lastName = lastName;
-    }
+	@Override
+	public void setLastName(String lastName) {
+		this.lastName = lastName;
+	}
 
-    public String getBrokerSessionId() {
-        return brokerSessionId;
-    }
+	public String getBrokerSessionId() {
+		return brokerSessionId;
+	}
 
-    public void setBrokerSessionId(String brokerSessionId) {
-        this.brokerSessionId = brokerSessionId;
-    }
+	public void setBrokerSessionId(String brokerSessionId) {
+		this.brokerSessionId = brokerSessionId;
+	}
 
-    public String getBrokerUserId() {
-        return brokerUserId;
-    }
+	public String getBrokerUserId() {
+		return brokerUserId;
+	}
 
-    public void setBrokerUserId(String brokerUserId) {
-        this.brokerUserId = brokerUserId;
-    }
+	public void setBrokerUserId(String brokerUserId) {
+		this.brokerUserId = brokerUserId;
+	}
 
-    public String getCode() {
-        return code;
-    }
+	public String getCode() {
+		return code;
+	}
 
-    public void setCode(String code) {
-        this.code = code;
-    }
+	public void setCode(String code) {
+		this.code = code;
+	}
 
-    public String getToken() {
-        return token;
-    }
+	public String getToken() {
+		return token;
+	}
 
-    public void setToken(String token) {
-        this.token = token;
-    }
+	public void setToken(String token) {
+		this.token = token;
+	}
 
-    public String getIdentityProviderId() {
-        return identityProviderId;
-    }
+	public String getIdentityProviderId() {
+		return identityProviderId;
+	}
 
-    public void setIdentityProviderId(String identityProviderId) {
-        this.identityProviderId = identityProviderId;
-    }
+	public void setIdentityProviderId(String identityProviderId) {
+		this.identityProviderId = identityProviderId;
+	}
 
-    public Map<String, ContextDataEntry> getContextData() {
-        return contextData;
-    }
+	public Map<String, ContextDataEntry> getContextData() {
+		return contextData;
+	}
 
-    public void setContextData(Map<String, ContextDataEntry> contextData) {
-        this.contextData = contextData;
-    }
+	public void setContextData(Map<String, ContextDataEntry> contextData) {
+		this.contextData = contextData;
+	}
 
-    @JsonIgnore
-    @Override
-    public Map<String, List<String>> getAttributes() {
-        Map<String, List<String>> result = new HashMap<>();
+	@JsonIgnore
+	@Override
+	public Map<String, List<String>> getAttributes() {
+		Map<String, List<String>> result = new HashMap<>();
 
-        for (Map.Entry<String, ContextDataEntry> entry : this.contextData.entrySet()) {
-            if (entry.getKey().startsWith(Constants.USER_ATTRIBUTES_PREFIX)) {
-                String attrName = entry.getKey().substring(16); // length of USER_ATTRIBUTES_PREFIX
-                List<String> asList = getAttribute(attrName);
-                result.put(attrName, asList);
-            }
-        }
+		for (Map.Entry<String, ContextDataEntry> entry : this.contextData.entrySet()) {
+			if (entry.getKey().startsWith(Constants.USER_ATTRIBUTES_PREFIX)) {
+				String attrName = entry.getKey().substring(16); // length of USER_ATTRIBUTES_PREFIX
+				List<String> asList = getAttribute(attrName);
+				result.put(attrName, asList);
+			}
+		}
 
-        return result;
-    }
+		return result;
+	}
 
-    @JsonIgnore
-    @Override
-    public void setSingleAttribute(String name, String value) {
-        List<String> list = new ArrayList<>();
-        list.add(value);
-        setAttribute(name, list);
-    }
+	@JsonIgnore
+	@Override
+	public void setSingleAttribute(String name, String value) {
+		List<String> list = new ArrayList<>();
+		list.add(value);
+		setAttribute(name, list);
+	}
 
-    @JsonIgnore
-    @Override
-    public void setAttribute(String key, List<String> value) {
-        try {
-            byte[] listBytes = JsonSerialization.writeValueAsBytes(value);
-            String listStr = Base64Url.encode(listBytes);
-            ContextDataEntry ctxEntry = ContextDataEntry.create(List.class.getName(), listStr);
-            this.contextData.put(Constants.USER_ATTRIBUTES_PREFIX + key, ctxEntry);
-        } catch (IOException ioe) {
-            throw new RuntimeException(ioe);
-        }
-    }
+	@JsonIgnore
+	@Override
+	public void setAttribute(String key, List<String> value) {
+		try {
+			byte[] listBytes = JsonSerialization.writeValueAsBytes(value);
+			String listStr = Base64Url.encode(listBytes);
+			ContextDataEntry ctxEntry = ContextDataEntry.create(List.class.getName(), listStr);
+			this.contextData.put(Constants.USER_ATTRIBUTES_PREFIX + key, ctxEntry);
+		} catch (IOException ioe) {
+			throw new RuntimeException(ioe);
+		}
+	}
 
-    @JsonIgnore
-    @Override
-    public List<String> getAttribute(String key) {
-        ContextDataEntry ctxEntry = this.contextData.get(Constants.USER_ATTRIBUTES_PREFIX + key);
-        if (ctxEntry != null) {
-            try {
-                String asString = ctxEntry.getData();
-                byte[] asBytes = Base64Url.decode(asString);
-                List<String> asList = JsonSerialization.readValue(asBytes, List.class);
-                return asList;
-            } catch (IOException ioe) {
-                throw new RuntimeException(ioe);
-            }
-        } else {
-            return null;
-        }
-    }
+	@JsonIgnore
+	@Override
+	public List<String> getAttribute(String key) {
+		ContextDataEntry ctxEntry = this.contextData.get(Constants.USER_ATTRIBUTES_PREFIX + key);
+		if (ctxEntry != null) {
+			try {
+				String asString = ctxEntry.getData();
+				byte[] asBytes = Base64Url.decode(asString);
+				List<String> asList = JsonSerialization.readValue(asBytes, List.class);
+				return asList;
+			} catch (IOException ioe) {
+				throw new RuntimeException(ioe);
+			}
+		} else {
+			return null;
+		}
+	}
 
-    @JsonIgnore
-    @Override
-    public String getFirstAttribute(String name) {
-        List<String> attrs = getAttribute(name);
-        if (attrs == null || attrs.isEmpty()) {
-            return null;
-        } else {
-            return attrs.get(0);
-        }
-    }
+	@JsonIgnore
+	@Override
+	public String getFirstAttribute(String name) {
+		List<String> attrs = getAttribute(name);
+		if (attrs == null || attrs.isEmpty()) {
+			return null;
+		} else {
+			return attrs.get(0);
+		}
+	}
 
-    public BrokeredIdentityContext deserialize(KeycloakSession session, AuthenticationSessionModel authSession) {
-        BrokeredIdentityContext ctx = new BrokeredIdentityContext(getId());
+	public BrokeredIdentityContext deserialize(KeycloakSession session, AuthenticationSessionModel authSession) {
+		BrokeredIdentityContext ctx = new BrokeredIdentityContext(getId());
 
-        ctx.setUsername(getBrokerUsername());
-        ctx.setModelUsername(getModelUsername());
-        ctx.setEmail(getEmail());
-        ctx.setFirstName(getFirstName());
-        ctx.setLastName(getLastName());
-        ctx.setBrokerSessionId(getBrokerSessionId());
-        ctx.setBrokerUserId(getBrokerUserId());
-        ctx.setToken(getToken());
+		ctx.setUsername(getBrokerUsername());
+		ctx.setModelUsername(getModelUsername());
+		ctx.setEmail(getEmail());
+		ctx.setFirstName(getFirstName());
+		ctx.setLastName(getLastName());
+		ctx.setBrokerSessionId(getBrokerSessionId());
+		ctx.setBrokerUserId(getBrokerUserId());
+		ctx.setToken(getToken());
 
-        RealmModel realm = authSession.getRealm();
-        IdentityProviderModel idpConfig = realm.getIdentityProviderByAlias(getIdentityProviderId());
-        if (idpConfig == null) {
-            throw new ModelException("Can't find identity provider with ID " + getIdentityProviderId() + " in realm " + realm.getName());
-        }
-        IdentityProvider idp = IdentityBrokerService.getIdentityProvider(session, realm, idpConfig.getAlias());
-        ctx.setIdpConfig(idpConfig);
-        ctx.setIdp(idp);
+		RealmModel realm = authSession.getRealm();
+		IdentityProviderModel idpConfig = realm.getIdentityProviderByAlias(getIdentityProviderId());
+		if (idpConfig == null) {
+			throw new ModelException(
+					"Can't find identity provider with ID " + getIdentityProviderId() + " in realm " + realm.getName());
+		}
+		IdentityProvider idp = IdentityBrokerService.getIdentityProvider(session, realm, idpConfig.getAlias());
+		ctx.setIdpConfig(idpConfig);
+		ctx.setIdp(idp);
 
-        IdentityProviderDataMarshaller serializer = idp.getMarshaller();
+		IdentityProviderDataMarshaller serializer = idp.getMarshaller();
 
-        for (Map.Entry<String, ContextDataEntry> entry : getContextData().entrySet()) {
-            try {
-                ContextDataEntry value = entry.getValue();
-                Class<?> clazz = Reflections.classForName(value.getClazz(), this.getClass().getClassLoader());
+		for (Map.Entry<String, ContextDataEntry> entry : getContextData().entrySet()) {
+			try {
+				ContextDataEntry value = entry.getValue();
+				Class<?> clazz = Reflections.classForName(value.getClazz(), this.getClass().getClassLoader());
 
-                Object deserialized = serializer.deserialize(value.getData(), clazz);
+				Object deserialized = serializer.deserialize(value.getData(), clazz);
 
-                ctx.getContextData().put(entry.getKey(), deserialized);
-            } catch (Exception e) {
-                throw new RuntimeException(e);
-            }
-        }
+				ctx.getContextData().put(entry.getKey(), deserialized);
+			} catch (Exception e) {
+				throw new RuntimeException(e);
+			}
+		}
 
-        ctx.setAuthenticationSession(authSession);
-        return ctx;
-    }
+		ctx.setAuthenticationSession(authSession);
+		return ctx;
+	}
 
-    public static SerializedBrokeredIdentityContext serialize(BrokeredIdentityContext context) {
-        SerializedBrokeredIdentityContext ctx = new SerializedBrokeredIdentityContext();
-        ctx.setId(context.getId());
-        ctx.setBrokerUsername(context.getUsername());
-        ctx.setModelUsername(context.getModelUsername());
-        ctx.setEmail(context.getEmail());
-        ctx.setFirstName(context.getFirstName());
-        ctx.setLastName(context.getLastName());
-        ctx.setBrokerSessionId(context.getBrokerSessionId());
-        ctx.setBrokerUserId(context.getBrokerUserId());
-        ctx.setToken(context.getToken());
-        ctx.setIdentityProviderId(context.getIdpConfig().getAlias());
+	public static SerializedBrokeredIdentityContext serialize(BrokeredIdentityContext context) {
+		SerializedBrokeredIdentityContext ctx = new SerializedBrokeredIdentityContext();
+		ctx.setId(context.getId());
+		ctx.setBrokerUsername(context.getUsername());
+		ctx.setModelUsername(context.getModelUsername());
+		ctx.setEmail(context.getEmail());
+		ctx.setFirstName(context.getFirstName());
+		ctx.setLastName(context.getLastName());
+		ctx.setBrokerSessionId(context.getBrokerSessionId());
+		ctx.setBrokerUserId(context.getBrokerUserId());
+		ctx.setToken(context.getToken());
+		ctx.setIdentityProviderId(context.getIdpConfig().getAlias());
 
-        ctx.emailAsUsername = context.getAuthenticationSession().getRealm().isRegistrationEmailAsUsername();
+		ctx.emailAsUsername = context.getAuthenticationSession().getRealm().isRegistrationEmailAsUsername();
 
-        IdentityProviderDataMarshaller serializer = context.getIdp().getMarshaller();
+		IdentityProviderDataMarshaller serializer = context.getIdp().getMarshaller();
 
-        for (Map.Entry<String, Object> entry : context.getContextData().entrySet()) {
-            Object value = entry.getValue();
-            String serializedValue = serializer.serialize(value);
+		logger.trace("Serializing context");
+		for (Map.Entry<String, Object> entry : context.getContextData().entrySet()) {
+			Object value = entry.getValue();
+			logger.trace(String.format("{\"name\": \"%s\", \"value\": \"%s\"}", entry.getKey(), value));
+			String serializedValue = serializer.serialize(value);
 
-            ContextDataEntry ctxEntry = ContextDataEntry.create(value.getClass().getName(), serializedValue);
-            ctx.getContextData().put(entry.getKey(), ctxEntry);
-        }
-        return ctx;
-    }
+			ContextDataEntry ctxEntry = ContextDataEntry.create(value.getClass().getName(), serializedValue);
+			ctx.getContextData().put(entry.getKey(), ctxEntry);
+		}
+		return ctx;
+	}
 
-    // Save this context as note to authSession
-    public void saveToAuthenticationSession(AuthenticationSessionModel authSession, String noteKey) {
-        try {
-            String asString = JsonSerialization.writeValueAsString(this);
-            authSession.setAuthNote(noteKey, asString);
-        } catch (IOException ioe) {
-            throw new RuntimeException(ioe);
-        }
-    }
+	// Save this context as note to authSession
+	public void saveToAuthenticationSession(AuthenticationSessionModel authSession, String noteKey) {
+		try {
+			String asString = JsonSerialization.writeValueAsString(this);
+			authSession.setAuthNote(noteKey, asString);
+		} catch (IOException ioe) {
+			throw new RuntimeException(ioe);
+		}
+	}
 
-    public static SerializedBrokeredIdentityContext readFromAuthenticationSession(AuthenticationSessionModel authSession, String noteKey) {
-        String asString = authSession.getAuthNote(noteKey);
-        if (asString == null) {
-            return null;
-        } else {
-            try {
-                SerializedBrokeredIdentityContext serializedCtx = JsonSerialization.readValue(asString, SerializedBrokeredIdentityContext.class);
-                serializedCtx.emailAsUsername = authSession.getRealm().isRegistrationEmailAsUsername();
-                return serializedCtx;
-            } catch (IOException ioe) {
-                throw new RuntimeException(ioe);
-            }
-        }
-    }
+	public static SerializedBrokeredIdentityContext readFromAuthenticationSession(
+			AuthenticationSessionModel authSession, String noteKey) {
+		String asString = authSession.getAuthNote(noteKey);
+		if (asString == null) {
+			return null;
+		} else {
+			try {
+				SerializedBrokeredIdentityContext serializedCtx = JsonSerialization
+						.readValue(asString, SerializedBrokeredIdentityContext.class);
+				serializedCtx.emailAsUsername = authSession.getRealm().isRegistrationEmailAsUsername();
+				return serializedCtx;
+			} catch (IOException ioe) {
+				throw new RuntimeException(ioe);
+			}
+		}
+	}
 
-    public static class ContextDataEntry {
+	public static class ContextDataEntry {
 
-        private String clazz;
-        private String data;
+		private String clazz;
+		private String data;
 
-        public String getClazz() {
-            return clazz;
-        }
+		public String getClazz() {
+			return clazz;
+		}
 
-        public void setClazz(String clazz) {
-            this.clazz = clazz;
-        }
+		public void setClazz(String clazz) {
+			this.clazz = clazz;
+		}
 
-        public String getData() {
-            return data;
-        }
+		public String getData() {
+			return data;
+		}
 
-        public void setData(String data) {
-            this.data = data;
-        }
+		public void setData(String data) {
+			this.data = data;
+		}
 
-        public static ContextDataEntry create(String clazz, String data) {
-            ContextDataEntry entry = new ContextDataEntry();
-            entry.setClazz(clazz);
-            entry.setData(data);
-            return entry;
-        }
-    }
+		public static ContextDataEntry create(String clazz, String data) {
+			ContextDataEntry entry = new ContextDataEntry();
+			entry.setClazz(clazz);
+			entry.setData(data);
+			return entry;
+		}
+	}
 }
