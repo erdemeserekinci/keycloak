@@ -13,7 +13,7 @@ if [ "$GIT_REPO" != "" ]; then
     microdnf install -y git
 
     # Install Maven
-    cd /opt/jboss 
+    cd /opt/jboss
     curl -s https://apache.uib.no/maven/maven-3/3.5.4/binaries/apache-maven-3.5.4-bin.tar.gz | tar xz
     mv apache-maven-3.5.4 /opt/jboss/maven
     export M2_HOME=/opt/jboss/maven
@@ -28,23 +28,23 @@ if [ "$GIT_REPO" != "" ]; then
     echo "Keycloak from [build]: $GIT_REPO/$GIT_BRANCH/commit/$MASTER_HEAD"
 
     $M2_HOME/bin/mvn -Pdistribution -pl distribution/server-dist -am -Dmaven.test.skip clean install
-    
+
     cd /opt/jboss
 
     tar xfz /opt/jboss/keycloak-source/distribution/server-dist/target/keycloak-*.tar.gz
-    
-    mv /opt/jboss/keycloak-* /opt/jboss/keycloak
+
+    mv /opt/jboss/keycloak-?.?.?* /opt/jboss/keycloak
 
     # Remove temporary files
     rm -rf /opt/jboss/maven
     rm -rf /opt/jboss/keycloak-source
     rm -rf $HOME/.m2/repository
 else
-    echo "Keycloak from [download]: $KEYCLOAK_DIST"
+    echo "Keycloak: $KEYCLOAK_DIST"
 
     cd /opt/jboss/
-    curl -L $KEYCLOAK_DIST | tar zx
-    mv /opt/jboss/keycloak-* /opt/jboss/keycloak
+#    $KEYCLOAK_DIST | tar zx
+#    mv /opt/jboss/keycloak-?.?.?* /opt/jboss/keycloak
 fi
 
 #####################
@@ -55,7 +55,6 @@ mkdir -p /opt/jboss/keycloak/modules/system/layers/base/com/mysql/jdbc/main
 cd /opt/jboss/keycloak/modules/system/layers/base/com/mysql/jdbc/main
 curl -O https://repo1.maven.org/maven2/mysql/mysql-connector-java/$JDBC_MYSQL_VERSION/mysql-connector-java-$JDBC_MYSQL_VERSION.jar
 cp /opt/jboss/tools/databases/mysql/module.xml .
-sed "s/JDBC_MYSQL_VERSION/$JDBC_MYSQL_VERSION/" /opt/jboss/tools/databases/mysql/module.xml > module.xml
 
 mkdir -p /opt/jboss/keycloak/modules/system/layers/base/org/postgresql/jdbc/main
 cd /opt/jboss/keycloak/modules/system/layers/base/org/postgresql/jdbc/main
@@ -88,18 +87,14 @@ rm -rf /opt/jboss/keycloak/standalone/configuration/standalone_xml_history
 bin/jboss-cli.sh --file=/opt/jboss/tools/cli/standalone-ha-configuration.cli
 rm -rf /opt/jboss/keycloak/standalone/configuration/standalone_xml_history
 
-###########
-# Garbage #
-###########
-
-rm -rf /opt/jboss/keycloak/standalone/tmp/auth
-rm -rf /opt/jboss/keycloak/domain/tmp/auth
-
 ###################
 # Set permissions #
 ###################
 
-echo "jboss:x:0:root" >> /etc/group
-echo "jboss:x:1000:0:JBoss user:/opt/jboss:/sbin/nologin" >> /etc/passwd
-chown -R jboss:root /opt/jboss
-chmod -R g+rwX /opt/jboss
+echo "jboss:x:1000:jboss" >> /etc/group
+echo "jboss:x:1000:1000:JBoss user:/opt/jboss:/sbin/nologin" >> /etc/passwd
+chown -R jboss:jboss /opt/jboss
+chmod -R g+rw /opt/jboss
+
+rm -rf /opt/jboss/keycloak/standalone/tmp/auth
+rm -rf /opt/jboss/keycloak/domain/tmp/auth
