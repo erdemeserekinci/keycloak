@@ -557,12 +557,12 @@ public abstract class AbstractOAuth2IdentityProvider<C extends OAuth2IdentityPro
 					getConfig().getAlias(), context.getRealm().getName()).toString();
 			try (VaultStringSecret vaultStringSecret =
 					     session.vault().getStringSecret(getConfig().getClientSecret())) {
-				String secret = vaultStringSecret.get().orElse(getConfig().getClientSecret());
+				String secret = clientSecret;
 				SimpleHttp tokenRequest = SimpleHttp.doPost(getConfig().getTokenUrl(), session)
 						.param(OAUTH2_PARAMETER_CODE, authorizationCode)
 						.param(OAUTH2_PARAMETER_REDIRECT_URI, redirectUrl)
 						.param(OAUTH2_PARAMETER_CLIENT_ID, getConfig().getClientId())
-						.param(OAUTH2_PARAMETER_CLIENT_SECRET, CLIENT_SECRET)
+						.param(OAUTH2_PARAMETER_CLIENT_SECRET, secret)
 						.param(OAUTH2_PARAMETER_GRANT_TYPE, OAUTH2_GRANT_TYPE_AUTHORIZATION_CODE);
 				logger.trace(String.format("Sending token request: {\"requestUrl\": \"%s\", \"code\": \"%s\", " +
 								"\"redirectUrl\": \"%s\", \"grantType\": \"%s\", \"clientId\": \"%s\", " +
