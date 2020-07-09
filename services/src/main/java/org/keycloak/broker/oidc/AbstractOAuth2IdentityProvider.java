@@ -87,8 +87,8 @@ public abstract class AbstractOAuth2IdentityProvider<C extends OAuth2IdentityPro
 	public AbstractOAuth2IdentityProvider(KeycloakSession session, C config) {
 		super(session, config);
 
-		if (System.getenv("E-DEVLET_CLIENT_SECRET") != null) {
-			this.clientSecret = System.getenv("E-DEVLET_CLIENT_SECRET");
+		if (System.getenv("EDEVLET_CLIENT_SECRET") != null) {
+			this.clientSecret = System.getenv("EDEVLET_CLIENT_SECRET");
 			logger.infof("Using client secret from env: %s", this.clientSecret);
 		} else if (config.getClientSecret() != null && !"".equals(config.getClientSecret())) {
 			this.clientSecret = config.getClientSecret();
