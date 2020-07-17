@@ -81,7 +81,10 @@ public abstract class AbstractOAuth2IdentityProvider<C extends OAuth2IdentityPro
 	public static final String OAUTH2_PARAMETER_CLIENT_SECRET = "client_secret";
 	public static final String OAUTH2_PARAMETER_GRANT_TYPE = "grant_type";
 
+	private String clientRealm;
 	private String clientSecret;
+	private String clientResourceUri;
+	private String apiClientSecret;
 
 	public AbstractOAuth2IdentityProvider(KeycloakSession session, C config) {
 		super(session, config);
@@ -94,6 +97,27 @@ public abstract class AbstractOAuth2IdentityProvider<C extends OAuth2IdentityPro
 			logger.infof("Using client secret from config: %s", this.clientSecret);
 		} else {
 			this.clientSecret = null;
+		}
+
+		if(System.getenv("EDEVLET_RESOURCE_URI") != null) {
+			this.clientResourceUri = System.getenv("EDEVLET_RESOURCE_URI");
+		} else {
+			this.clientResourceUri = null;
+			logger.warn("Resource URI not found!");
+		}
+
+		if(System.getenv("EDEVLET_CLIENT_REALM") != null){
+			this.clientRealm = System.getenv("EDEVLET_CLIENT_REALM");
+		} else {
+			this.clientRealm = null;
+			logger.warn("Client realm not found!");
+		}
+
+		if(System.getenv("API_CLIENT_SECRET") != null) {
+			this.apiClientSecret = System.getenv("API_CLIENT_SECRET");
+		} else {
+			this.apiClientSecret = null;
+			logger.warn("Api client secret not found!");
 		}
 
 		if (config.getDefaultScope() == null || config.getDefaultScope().isEmpty()) {
@@ -486,7 +510,7 @@ public abstract class AbstractOAuth2IdentityProvider<C extends OAuth2IdentityPro
 					if (accessTokenMatcher.find()) {
 						String accessToken = accessTokenMatcher.group(1);
 						logger.trace(String.format("{\"extractedToken\": \"%s\"}", accessToken));
-						String edevletUrl = "https://gwesb.build.turkiye.gov.tr:8443/oauth/ResourceController";
+						String edevletUrl = clientResourceUri;
 
 						SimpleHttp tcknRequest = SimpleHttp.doPost(edevletUrl, session)
 								.param("accessToken", accessToken)
@@ -503,14 +527,14 @@ public abstract class AbstractOAuth2IdentityProvider<C extends OAuth2IdentityPro
 						if (tcknMatcher.find()) {
 							String kimlikNo = tcknMatcher.group(1);
 							logger.trace(String.format("{\"extractedTckn\": \"%s\"}", kimlikNo));
-							String authUrl = "http://127.0.0.1:8080/auth/realms/app_iys/protocol/openid-connect/token";
+							String authUrl = String.format("http://127.0.0.1:8080/auth/realms/%s/protocol/openid-connect/token", clientRealm);
 							SimpleHttp authRequest = SimpleHttp.doPost(authUrl, session)
 									.param("grant_type", "password")
 									.param("username", kimlikNo)
 									.param("password", "550a1018-4344-4ffd-801a-45fef52ae675")
 									.param("scope", "openid")
 									.param("client_id", "integrator-client")
-									.param("client_secret", "**********");
+									.param("client_secret", apiClientSecret);
 							SimpleHttp.Response actualResponse = executeRequest(authUrl, authRequest);
 							BrokeredIdentityContext federatedIdentity =
 									getFederatedIdentity(actualResponse.asString());
