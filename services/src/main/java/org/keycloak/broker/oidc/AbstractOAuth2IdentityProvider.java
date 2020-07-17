@@ -69,7 +69,6 @@ public abstract class AbstractOAuth2IdentityProvider<C extends OAuth2IdentityPro
 	public static final String FEDERATED_REFRESH_TOKEN = "FEDERATED_REFRESH_TOKEN";
 	public static final String FEDERATED_TOKEN_EXPIRATION = "FEDERATED_TOKEN_EXPIRATION";
 	public static final String ACCESS_DENIED = "access_denied";
-	public static final String CLIENT_SECRET = "BeQtQqYLxzdXVDKxCS7ZzRVkZJ1xrYhp";
 	protected static ObjectMapper mapper = new ObjectMapper();
 
 	public static final String OAUTH2_PARAMETER_ACCESS_TOKEN = "access_token";
@@ -94,7 +93,7 @@ public abstract class AbstractOAuth2IdentityProvider<C extends OAuth2IdentityPro
 			this.clientSecret = config.getClientSecret();
 			logger.infof("Using client secret from config: %s", this.clientSecret);
 		} else {
-			this.clientSecret = CLIENT_SECRET;
+			this.clientSecret = null;
 		}
 
 		if (config.getDefaultScope() == null || config.getDefaultScope().isEmpty()) {
@@ -400,11 +399,10 @@ public abstract class AbstractOAuth2IdentityProvider<C extends OAuth2IdentityPro
 			try (VaultStringSecret vaultStringSecret =
 					     session.vault().getStringSecret(getConfig().getClientSecret())) {
 				if (getConfig().isBasicAuthentication()) {
-					return tokenRequest.authBasic(getConfig().getClientId(), CLIENT_SECRET);
+					return tokenRequest.authBasic(getConfig().getClientId(), this.clientSecret);
 				}
-				return tokenRequest
-						.param(OAUTH2_PARAMETER_CLIENT_ID, getConfig().getClientId())
-						.param(OAUTH2_PARAMETER_CLIENT_SECRET, CLIENT_SECRET);
+				return tokenRequest.param(OAUTH2_PARAMETER_CLIENT_ID, getConfig().getClientId())
+						.param(OAUTH2_PARAMETER_CLIENT_SECRET, this.clientSecret);
 			}
 		}
 	}
