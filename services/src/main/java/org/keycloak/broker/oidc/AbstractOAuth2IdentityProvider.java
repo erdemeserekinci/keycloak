@@ -57,6 +57,8 @@ import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import static org.keycloak.broker.oidc.OIDCIdentityProvider.FEDERATED_ACCESS_TOKEN_RESPONSE;
+
 /**
  * @author Pedro Igor
  */
@@ -87,7 +89,7 @@ public abstract class AbstractOAuth2IdentityProvider<C extends OAuth2IdentityPro
 	private String apiClientSecret;
 
 	public AbstractOAuth2IdentityProvider(KeycloakSession session, C config) {
-		super(session, config);
+			super(session, config);
 
 		if (System.getenv("EDEVLET_CLIENT_SECRET") != null) {
 			this.clientSecret = System.getenv("EDEVLET_CLIENT_SECRET");
@@ -106,11 +108,10 @@ public abstract class AbstractOAuth2IdentityProvider<C extends OAuth2IdentityPro
 			logger.warn("Resource URI not found!");
 		}
 
-		if(System.getenv("EDEVLET_CLIENT_REALM") != null){
-			this.clientRealm = System.getenv("EDEVLET_CLIENT_REALM");
+		if (session != null && session.getContext() != null && session.getContext().getRealm() != null) {
+			this.clientRealm = session.getContext().getRealm().getName();
 		} else {
 			this.clientRealm = null;
-			logger.warn("Client realm not found!");
 		}
 
 		if(System.getenv("API_CLIENT_SECRET") != null) {
@@ -516,7 +517,7 @@ public abstract class AbstractOAuth2IdentityProvider<C extends OAuth2IdentityPro
 								.param("accessToken", accessToken)
 								.param("clientId", getConfig().getClientId())
 								.param("resourceId", "1")
-								.param("kapsam", "Kimlik-Dogrula");
+								.param("kapsam", getConfig().getDefaultScope());
 						logger.trace(String.format("{\"edevletRequest\": %s}", tcknRequest.asString()));
 
 						String edevletResponse = executeRequest(edevletUrl, tcknRequest).asString();
@@ -525,33 +526,41 @@ public abstract class AbstractOAuth2IdentityProvider<C extends OAuth2IdentityPro
 						Pattern tcknPattern = Pattern.compile("\"kimlikNo\":\"(.+?)\"");
 						Matcher tcknMatcher = tcknPattern.matcher(edevletResponse);
 						if (tcknMatcher.find()) {
-							String kimlikNo = tcknMatcher.group(1);
-							logger.trace(String.format("{\"extractedTckn\": \"%s\"}", kimlikNo));
-							String authUrl = String.format("http://127.0.0.1:8080/auth/realms/%s/protocol/openid-connect/token", clientRealm);
-							SimpleHttp authRequest = SimpleHttp.doPost(authUrl, session)
-									.param("grant_type", "password")
-									.param("username", kimlikNo)
-									.param("password", "550a1018-4344-4ffd-801a-45fef52ae675")
-									.param("scope", "openid")
-									.param("client_id", "integrator-client")
-									.param("client_secret", apiClientSecret);
-							SimpleHttp.Response actualResponse = executeRequest(authUrl, authRequest);
-							BrokeredIdentityContext federatedIdentity =
-									getFederatedIdentity(actualResponse.asString());
-							logger.debugf("Got federated user data: %s", federatedIdentity);
-							if (getConfig().isStoreToken()) {
-								// make sure that token wasn't already set by getFederatedIdentity();
-								// want to be able to allow provider to set the token itself.
-								if (federatedIdentity.getToken() == null)
-									federatedIdentity.setToken(actualResponse.asString());
+							Pattern firstNamePattern = Pattern.compile("\"ad\":\"(.+?)\"");
+							Matcher firstNameMatcher = firstNamePattern.matcher(edevletResponse);
+							Pattern lastNamePattern = Pattern.compile("\"soyad\":\"(.+?)\"");
+							Matcher lastNameMatcher = lastNamePattern.matcher(edevletResponse);
+							if ((getConfig().getDefaultScope().contains("Ad-Soyad") && firstNameMatcher.find() &&
+									lastNameMatcher.find()) || !getConfig().getDefaultScope().contains("Ad-Soyad")) {
+								String kimlikNo = tcknMatcher.group(1);
+								logger.trace(String.format("{\"extractedTckn\": \"%s\"}", kimlikNo));
+								String token =
+										new JWSBuilder().type(OAuth2Constants.JWT).jsonContent(generateToken()).sign(getSignatureContext());
+								BrokeredIdentityContext federatedIdentity = new BrokeredIdentityContext(kimlikNo);
+								federatedIdentity.getContextData()
+										.put(FEDERATED_ACCESS_TOKEN_RESPONSE, getAccessTokenResponse(state, token));
+								logger.debugf("Got federated user data: %s", federatedIdentity);
+								if (getConfig().isStoreToken()) {
+									// make sure that token wasn't already set by getFederatedIdentity();
+									// want to be able to allow provider to set the token itself.
+									if (federatedIdentity.getToken() == null)
+										federatedIdentity.setToken(getTokenInfo(state, token).toString());
+								}
+
+								federatedIdentity.setIdpConfig(getConfig());
+								federatedIdentity.setIdp(AbstractOAuth2IdentityProvider.this);
+								federatedIdentity.setUsername(kimlikNo);
+								federatedIdentity.setCode(state);
+								if (firstNameMatcher.find() && lastNameMatcher.find()) {
+									federatedIdentity.setFirstName(firstNameMatcher.group(1));
+									federatedIdentity.setLastName(lastNameMatcher.group(1));
+								}
+								return callback.authenticated(federatedIdentity);
+							} else {
+								logger.errorv("Unable to parse first name or last name on: {0}",
+										executeRequest(edevletUrl, tcknRequest));
+								errorMessage = "e-Devlet kullanıcı bilgileri alınamadı.";
 							}
-
-							federatedIdentity.setIdpConfig(getConfig());
-							federatedIdentity.setIdp(AbstractOAuth2IdentityProvider.this);
-							federatedIdentity.setUsername(kimlikNo);
-							federatedIdentity.setCode(state);
-
-							return callback.authenticated(federatedIdentity);
 						} else {
 							logger.errorv("Unable to parse TCKN on: {0}", executeRequest(edevletUrl, tcknRequest));
 							errorMessage = "e-Devlet kullanıcı bilgileri alınamadı.";
@@ -571,6 +580,27 @@ public abstract class AbstractOAuth2IdentityProvider<C extends OAuth2IdentityPro
 			event.error(Errors.IDENTITY_PROVIDER_LOGIN_FAILURE);
 			return ErrorPage
 					.error(session, null, Response.Status.BAD_GATEWAY, errorMessage);
+		}
+
+		private AccessTokenResponse getAccessTokenResponse(String state, String token) {
+			AccessTokenResponse accessTokenResponse = new AccessTokenResponse();
+			accessTokenResponse.setExpiresIn(session.getContext().getRealm().getAccessCodeLifespan());
+			accessTokenResponse.setToken(token);
+			accessTokenResponse.setSessionState(state);
+			accessTokenResponse.setScope("profile email");
+			accessTokenResponse.setTokenType("bearer");
+			return accessTokenResponse;
+		}
+
+		private StringBuilder getTokenInfo(String state, String token) {
+			StringBuilder tokenBuilder = new StringBuilder();
+			tokenBuilder.append("{");
+			tokenBuilder.append("\"token\":").append("\"").append(token).append("\"").append(",");
+			tokenBuilder.append("\"sessionState\":").append("\"").append(state).append("\"").append(",");
+			tokenBuilder.append("\"scope\":").append("\"").append("profile email").append("\"").append(",");
+			tokenBuilder.append("\"tokenType\":").append("\"").append("bearer");
+			tokenBuilder.append("}");
+			return tokenBuilder;
 		}
 
 		public SimpleHttp generateTokenRequest(String authorizationCode) {
@@ -732,5 +762,10 @@ public abstract class AbstractOAuth2IdentityProvider<C extends OAuth2IdentityPro
 
 	}
 
-
+	/**
+	 * only test
+	 */
+	public String getClientRealm() {
+		return clientRealm;
+	}
 }
