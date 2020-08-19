@@ -595,10 +595,10 @@ public abstract class AbstractOAuth2IdentityProvider<C extends OAuth2IdentityPro
 		private StringBuilder getTokenInfo(String state, String token) {
 			StringBuilder tokenBuilder = new StringBuilder();
 			tokenBuilder.append("{");
-			tokenBuilder.append("\"token\":").append("\"").append(token).append("\"").append(",");
-			tokenBuilder.append("\"sessionState\":").append("\"").append(state).append("\"").append(",");
+			tokenBuilder.append("\"access_token\":").append("\"").append(token).append("\"").append(",");
+			tokenBuilder.append("\"session_state\":").append("\"").append(state).append("\"").append(",");
 			tokenBuilder.append("\"scope\":").append("\"").append("profile email").append("\"").append(",");
-			tokenBuilder.append("\"tokenType\":").append("\"").append("bearer");
+			tokenBuilder.append("\"token_type\":").append("\"").append("bearer").append("\"");
 			tokenBuilder.append("}");
 			return tokenBuilder;
 		}
