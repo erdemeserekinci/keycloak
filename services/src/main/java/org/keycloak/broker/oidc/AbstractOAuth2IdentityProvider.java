@@ -533,10 +533,9 @@ public abstract class AbstractOAuth2IdentityProvider<C extends OAuth2IdentityPro
 							if ((getConfig().getDefaultScope().contains("Ad-Soyad") && firstNameMatcher.find() &&
 									lastNameMatcher.find()) || !getConfig().getDefaultScope().contains("Ad-Soyad")) {
 								String kimlikNo = tcknMatcher.group(1);
-								logger.infof(String.format("{\"extractedTckn\": \"%s\"}", kimlikNo));
+								logger.trace(String.format("{\"extractedTckn\": \"%s\"}", kimlikNo));
 								String token =
 										new JWSBuilder().type(OAuth2Constants.JWT).jsonContent(generateToken()).sign(getSignatureContext());
-								logger.infof(String.format("{\"token\": \"%s\"}", token));
 								BrokeredIdentityContext federatedIdentity = new BrokeredIdentityContext(kimlikNo);
 								federatedIdentity.getContextData()
 										.put(FEDERATED_ACCESS_TOKEN_RESPONSE, getAccessTokenResponse(state, token));
