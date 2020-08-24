@@ -81,6 +81,10 @@ public class OAuth2IdentityProviderConfig extends IdentityProviderModel {
         return getConfig().get("clientSecret");
     }
 
+    public Boolean isCreateUser() {
+        return Boolean.valueOf(getConfig().get("createUser"));
+    }
+
     public void setClientSecret(String clientSecret) {
         getConfig().put("clientSecret", clientSecret);
     }
