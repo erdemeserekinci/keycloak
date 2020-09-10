@@ -53,6 +53,14 @@ public class OAuth2IdentityProviderConfig extends IdentityProviderModel {
         getConfig().put("tokenUrl", tokenUrl);
     }
 
+    public String getResourceUrl() {
+        return getConfig().get("resourceUrl");
+    }
+
+    public void setResourceUrl(String resourceUrl) {
+        getConfig().put("resourceUrl", resourceUrl);
+    }
+
     public String getUserInfoUrl() {
         return getConfig().get("userInfoUrl");
     }
