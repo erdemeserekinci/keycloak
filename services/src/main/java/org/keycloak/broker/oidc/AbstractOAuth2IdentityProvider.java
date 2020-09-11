@@ -85,7 +85,6 @@ public abstract class AbstractOAuth2IdentityProvider<C extends OAuth2IdentityPro
 
 	private String clientRealm;
 	private String clientSecret;
-	private String clientResourceUri;
 	private String citizenClientSecret;
 
 	public AbstractOAuth2IdentityProvider(KeycloakSession session, C config) {
@@ -115,13 +114,6 @@ public abstract class AbstractOAuth2IdentityProvider<C extends OAuth2IdentityPro
 			logger.infof("Using client secret from config: %s", this.citizenClientSecret);
 		} else {
 			this.citizenClientSecret = null;
-		}
-
-		if (System.getenv("EDEVLET_RESOURCE_URI") != null) {
-			this.clientResourceUri = System.getenv("EDEVLET_RESOURCE_URI");
-		} else {
-			this.clientResourceUri = null;
-			logger.warn("Resource URI not found!");
 		}
 
 		if (config.getDefaultScope() == null || config.getDefaultScope().isEmpty()) {
@@ -516,7 +508,7 @@ public abstract class AbstractOAuth2IdentityProvider<C extends OAuth2IdentityPro
 					if (accessTokenMatcher.find()) {
 						String accessToken = accessTokenMatcher.group(1);
 						logger.trace(String.format("{\"extractedToken\": \"%s\"}", accessToken));
-						String edevletUrl = clientResourceUri;
+						String edevletUrl = getConfig().getResourceUrl();
 
 						SimpleHttp tcknRequest = SimpleHttp.doPost(edevletUrl, session)
 								.param("accessToken", accessToken)
