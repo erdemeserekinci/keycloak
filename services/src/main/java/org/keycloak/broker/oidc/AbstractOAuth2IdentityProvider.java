@@ -53,7 +53,9 @@ import javax.ws.rs.core.*;
 import java.io.IOException;
 import java.net.URI;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -508,38 +510,26 @@ public abstract class AbstractOAuth2IdentityProvider<C extends OAuth2IdentityPro
 					if (accessTokenMatcher.find()) {
 						String accessToken = accessTokenMatcher.group(1);
 						logger.trace(String.format("{\"extractedToken\": \"%s\"}", accessToken));
-						String edevletUrl = getConfig().getResourceUrl();
 
-						SimpleHttp tcknRequest = SimpleHttp.doPost(edevletUrl, session)
-								.param("accessToken", accessToken)
-								.param("clientId", getConfig().getClientId())
-								.param("resourceId", "1")
-								.param("kapsam", getConfig().getDefaultScope());
-						logger.trace(String.format("{\"edevletRequest\": %s}", tcknRequest.asString()));
-						String edevletResponse = executeRequest(edevletUrl, tcknRequest).asString();
-						logger.trace(String.format("{\"gotUserData\": %s}", edevletResponse));
-						Pattern tcknPattern = Pattern.compile("\"kimlikNo\":\"(.+?)\"");
-						Matcher tcknMatcher = tcknPattern.matcher(edevletResponse);
-						if (tcknMatcher.find()) {
-							String kimlikNo = tcknMatcher.group(1);
+						String defaultScope = getConfig().getDefaultScope();
+						Map<String, String> informationMap = new HashMap<>();
+						String requestError = prepareInformation(accessToken, informationMap, defaultScope);
+
+						if (informationMap.containsKey("tckn") && requestError == null) {
+							String kimlikNo = informationMap.get("tckn");
 							logger.trace(String.format("{\"extractedTckn\": \"%s\"}", kimlikNo));
 							UserModel user = session.users().getUserByUsername(kimlikNo, realm);
 							if (getConfig().isCreateUser() || user != null) {
 								user = createUser(kimlikNo, user);
-								Pattern firstNamePattern = Pattern.compile("\"ad\":\"(.+?)\"");
-								Matcher firstNameMatcher = firstNamePattern.matcher(edevletResponse);
-								Pattern lastNamePattern = Pattern.compile("\"soyad\":\"(.+?)\"");
-								Matcher lastNameMatcher = lastNamePattern.matcher(edevletResponse);
-								if ((getConfig().getDefaultScope().contains("Ad-Soyad") && firstNameMatcher.find() &&
-										lastNameMatcher.find()) || !getConfig().getDefaultScope()
-										.contains("Ad-Soyad")) {
+								if (!defaultScope.contains("Ad-Soyad") || (informationMap.containsKey("name") &&
+										informationMap.containsKey("lastName"))) {
 									String token =
 											new JWSBuilder().type(OAuth2Constants.JWT).jsonContent(generateToken())
 													.sign(getSignatureContext());
-									BrokeredIdentityContext federatedIdentity = new BrokeredIdentityContext(user.getId());
+									BrokeredIdentityContext federatedIdentity = new BrokeredIdentityContext(
+											user.getId());
 									federatedIdentity.getContextData()
-											.put(FEDERATED_ACCESS_TOKEN_RESPONSE, getAccessTokenResponse(state,
-													token));
+											.put(FEDERATED_ACCESS_TOKEN_RESPONSE, getAccessTokenResponse(state, token));
 									logger.debugf("Got federated user data: %s", federatedIdentity);
 									if (getConfig().isStoreToken()) {
 										// make sure that token wasn't already set by getFederatedIdentity();
@@ -552,14 +542,17 @@ public abstract class AbstractOAuth2IdentityProvider<C extends OAuth2IdentityPro
 									federatedIdentity.setIdp(AbstractOAuth2IdentityProvider.this);
 									federatedIdentity.setUsername(kimlikNo);
 									federatedIdentity.setCode(state);
-									if (firstNameMatcher.find() && lastNameMatcher.find()) {
-										federatedIdentity.setFirstName(firstNameMatcher.group(1));
-										federatedIdentity.setLastName(lastNameMatcher.group(1));
+									if (informationMap.containsKey("name") && informationMap.containsKey("lastName")) {
+										String name = informationMap.get("name");
+										String lastName = informationMap.get("lastName");
+										user.setFirstName(name);
+										user.setLastName(lastName);
+										federatedIdentity.setFirstName(name);
+										federatedIdentity.setLastName(lastName);
 									}
 									return callback.authenticated(federatedIdentity);
 								} else {
-									logger.errorv("Unable to parse first name or last name on: {0}",
-											executeRequest(edevletUrl, tcknRequest).asString());
+									logger.errorv("Unable to parse first name or last name");
 									errorMessage = "e-Devlet kullanıcı bilgileri alınamadı.";
 								}
 							} else {
@@ -567,7 +560,7 @@ public abstract class AbstractOAuth2IdentityProvider<C extends OAuth2IdentityPro
 								errorMessage = "e-Devlet girişi başarısız.";
 							}
 						} else {
-							logger.errorv("Unable to parse TCKN on: {0}", executeRequest(edevletUrl, tcknRequest).asString());
+							logger.errorv("Unable to parse information on: {0}", requestError);
 							errorMessage = "e-Devlet kullanıcı bilgileri alınamadı.";
 						}
 					} else {
@@ -585,6 +578,50 @@ public abstract class AbstractOAuth2IdentityProvider<C extends OAuth2IdentityPro
 			event.error(Errors.IDENTITY_PROVIDER_LOGIN_FAILURE);
 			return ErrorPage
 					.error(session, null, Response.Status.BAD_GATEWAY, errorMessage);
+		}
+
+		private String prepareInformation(String accessToken, Map<String, String> informationMap,
+				String defaultScope) throws IOException {
+			String[] scopeList = defaultScope.split(";");
+			String requestError = null;
+			String edevletUrl = getConfig().getResourceUrl();
+			for (String scope : scopeList) {
+				SimpleHttp request = SimpleHttp.doPost(edevletUrl, session)
+						.param("accessToken", accessToken)
+						.param("clientId", getConfig().getClientId())
+						.param("resourceId", "1")
+						.param("kapsam", scope);
+				logger.trace(String.format("{\"edevletRequest\": %s}", request.asString()));
+				String edevletResponse = executeRequest(edevletUrl, request).asString();
+				logger.trace(String.format("{\"gotUserData\": %s}", edevletResponse));
+				Pattern resultDescriptionPattern = Pattern.compile("\"sonucAciklamasi\":\"(.+?)\"");
+				Matcher resultDescriptionMatcher = resultDescriptionPattern.matcher(edevletResponse);
+				if (resultDescriptionMatcher.find()) {
+					String resultDescription = resultDescriptionMatcher.group(1);
+					if (resultDescription.equals("HATASIZ")) {
+						Pattern tcknPattern = Pattern.compile("\"kimlikNo\":\"(.+?)\"");
+						Matcher tcknMatcher = tcknPattern.matcher(edevletResponse);
+						Pattern firstNamePattern = Pattern.compile("\"ad\":\"(.+?)\"");
+						Matcher firstNameMatcher = firstNamePattern.matcher(edevletResponse);
+						Pattern lastNamePattern = Pattern.compile("\"soyad\":\"(.+?)\"");
+						Matcher lastNameMatcher = lastNamePattern.matcher(edevletResponse);
+						if (tcknMatcher.find()) {
+							String kimlikNo = tcknMatcher.group(1);
+							logger.trace(String.format("{\"extractedTckn\": \"%s\"}", kimlikNo));
+							informationMap.put("tckn", kimlikNo);
+						}
+						if (firstNameMatcher.find() && lastNameMatcher.find()) {
+							informationMap.put("name", firstNameMatcher.group(1));
+							informationMap.put("lastName", lastNameMatcher.group(1));
+						}
+					} else {
+						requestError = edevletResponse;
+						break;
+					}
+				}
+
+			}
+			return requestError;
 		}
 
 		private UserModel createUser(String kimlikNo, UserModel user) {
