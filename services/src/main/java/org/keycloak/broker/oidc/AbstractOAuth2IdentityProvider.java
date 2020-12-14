@@ -517,7 +517,6 @@ public abstract class AbstractOAuth2IdentityProvider<C extends OAuth2IdentityPro
 
 						if (informationMap.containsKey("tckn") && requestError == null) {
 							String kimlikNo = informationMap.get("tckn");
-							logger.trace(String.format("{\"extractedTckn\": \"%s\"}", kimlikNo));
 							UserModel user = session.users().getUserByUsername(kimlikNo, realm);
 							if (getConfig().isCreateUser() || user != null) {
 								user = createUser(kimlikNo, user);
@@ -611,13 +610,18 @@ public abstract class AbstractOAuth2IdentityProvider<C extends OAuth2IdentityPro
 							informationMap.put("tckn", kimlikNo);
 						}
 						if (firstNameMatcher.find() && lastNameMatcher.find()) {
-							informationMap.put("name", firstNameMatcher.group(1));
-							informationMap.put("lastName", lastNameMatcher.group(1));
+							String name = firstNameMatcher.group(1);
+							String lastName = lastNameMatcher.group(1);
+							logger.trace(String.format("{\"name\": \"%s\", \"lastName\": \"%s\"}", name, lastName));
+							informationMap.put("name", name);
+							informationMap.put("lastName", lastName);
 						}
 					} else {
 						requestError = edevletResponse;
 						break;
 					}
+				} else {
+					requestError= edevletResponse;
 				}
 
 			}
