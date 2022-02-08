@@ -552,26 +552,26 @@ public abstract class AbstractOAuth2IdentityProvider<C extends OAuth2IdentityPro
 									return callback.authenticated(federatedIdentity);
 								} else {
 									logger.errorv("Unable to parse first name or last name");
-									errorMessage = "e-Devlet kullanıcı bilgileri alınamadı.";
+									errorMessage = "Sistemde oluşan bir hata nedeniyle işleminizi gerçekleştiremiyoruz, lütfen daha sonra tekrar deneyiniz.(001)";
 								}
 							} else {
 								logger.errorv("User with TCKN: {0} not found.", kimlikNo);
-								errorMessage = "e-Devlet girişi başarısız.";
+								errorMessage = "Lütfen İYS hesabınızın onaylandığından ve e-devlet bilgilerinizi doğru girdiğinizden emin olunuz.(002)";
 							}
 						} else {
 							logger.errorv("Unable to parse information on: {0}", requestError);
-							errorMessage = "e-Devlet kullanıcı bilgileri alınamadı.";
+							errorMessage = "Sistemde oluşan bir hata nedeniyle işleminizi gerçekleştiremiyoruz, lütfen daha sonra tekrar deneyiniz.(001)";
 						}
 					} else {
 						logger.errorv("Unable to parse auth token on: {0}", responseStr);
-						errorMessage = "e-Devlet girişi başarısız.";
+						errorMessage = "Sistemde oluşan bir hata nedeniyle işleminizi gerçekleştiremiyoruz, lütfen daha sonra tekrar deneyiniz.(003)";
 					}
 				}
 			} catch (WebApplicationException e) {
 				return e.getResponse();
 			} catch (Exception e) {
 				logger.error("Failed to make identity provider oauth callback", e);
-				errorMessage = "e-Devlet kullanıcı bilgileri alınamadı.";
+				errorMessage = "Sistemde oluşan bir hata nedeniyle işleminizi gerçekleştiremiyoruz, lütfen daha sonra tekrar deneyiniz.(004)";
 			}
 			event.event(EventType.LOGIN);
 			event.error(Errors.IDENTITY_PROVIDER_LOGIN_FAILURE);
