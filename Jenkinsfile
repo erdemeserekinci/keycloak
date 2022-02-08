@@ -8,11 +8,11 @@ node {
         }
     }
     stage('Build docker image') {
-        docker.build("erdemeserekinci/keycloak/keycloak:11.0.37g", './distribution/server-dist')
+        docker.build("erdemeserekinci/keycloak/keycloak:11.0.38g", './distribution/server-dist')
     }
     stage('Push image to registry') {
         docker.withRegistry('https://docker.pkg.github.com', 'github-bot') {
-            def snapshotImage = docker.image("erdemeserekinci/keycloak/keycloak:11.0.37g")
+            def snapshotImage = docker.image("erdemeserekinci/keycloak/keycloak:11.0.38g")
             snapshotImage.push()
             snapshotImage.push('latest')
         }
