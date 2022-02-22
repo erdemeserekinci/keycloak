@@ -549,6 +549,7 @@ public abstract class AbstractOAuth2IdentityProvider<C extends OAuth2IdentityPro
 										federatedIdentity.setFirstName(name);
 										federatedIdentity.setLastName(lastName);
 									}
+									logger.infov("User with TCKN: {0} logged in", kimlikNo);
 									return callback.authenticated(federatedIdentity);
 								} else {
 									logger.errorv("Unable to parse first name or last name");
@@ -659,8 +660,9 @@ public abstract class AbstractOAuth2IdentityProvider<C extends OAuth2IdentityPro
 
 		public SimpleHttp generateTokenRequest(String authorizationCode) {
 			KeycloakContext context = session.getContext();
-			String redirectUrl = Urls.identityProviderAuthnResponse(context.getUri().getBaseUri(),
-					getConfig().getAlias(), context.getRealm().getName()).toString();
+//			String redirectUrl = Urls.identityProviderAuthnResponse(context.getUri().getBaseUri(),
+//					getConfig().getAlias(), context.getRealm().getName()).toString();
+			String redirectUrl = "https://giris.stage.iys.org.tr/auth/realms/app_iys/broker/edevlet/endpoint";
 			try (VaultStringSecret vaultStringSecret =
 					     session.vault().getStringSecret(getConfig().getClientSecret())) {
 				String secret = clientRealm.equals("citizen") ? citizenClientSecret :clientSecret;
