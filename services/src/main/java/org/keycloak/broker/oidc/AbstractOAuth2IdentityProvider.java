@@ -18,6 +18,7 @@ package org.keycloak.broker.oidc;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import javax.ws.rs.core.Response.Status;
 import org.jboss.logging.Logger;
 import org.keycloak.OAuth2Constants;
 import org.keycloak.OAuthErrorException;
@@ -100,20 +101,16 @@ public abstract class AbstractOAuth2IdentityProvider<C extends OAuth2IdentityPro
 
 		if (System.getenv("EDEVLET_CLIENT_SECRET") != null) {
 			this.clientSecret = System.getenv("EDEVLET_CLIENT_SECRET");
-			logger.infof("Using client secret from env: %s", this.clientSecret);
 		} else if (config.getClientSecret() != null && !"".equals(config.getClientSecret())) {
 			this.clientSecret = config.getClientSecret();
-			logger.infof("Using client secret from config: %s", this.clientSecret);
 		} else {
 			this.clientSecret = null;
 		}
 
 		if (System.getenv("EDEVLET_CITIZEN_CLIENT_SECRET") != null) {
 			this.citizenClientSecret = System.getenv("EDEVLET_CITIZEN_CLIENT_SECRET");
-			logger.infof("Using citizen client secret from env: %s", this.citizenClientSecret);
 		} else if (this.clientRealm.equals("citizen") && config.getClientSecret() != null && !"".equals(config.getClientSecret())) {
 			this.citizenClientSecret = config.getClientSecret();
-			logger.infof("Using client secret from config: %s", this.citizenClientSecret);
 		} else {
 			this.citizenClientSecret = null;
 		}
@@ -484,6 +481,7 @@ public abstract class AbstractOAuth2IdentityProvider<C extends OAuth2IdentityPro
 				@QueryParam(AbstractOAuth2IdentityProvider.OAUTH2_PARAMETER_CODE) String authorizationCode,
 				@QueryParam(OAuth2Constants.ERROR) String error) {
 			String errorMessage = Messages.IDENTITY_PROVIDER_UNEXPECTED_ERROR;
+			Response.Status status = Status.INTERNAL_SERVER_ERROR;
 			if (error != null) {
 				logger.error(error + " for broker login " + getConfig().getProviderId());
 				if (error.equals(ACCESS_DENIED)) {
@@ -503,13 +501,11 @@ public abstract class AbstractOAuth2IdentityProvider<C extends OAuth2IdentityPro
 				if (authorizationCode != null) {
 					SimpleHttp response = generateTokenRequest(authorizationCode);
 					String responseStr = response.asString();
-					logger.trace(String.format("Token response: %s", responseStr));
 
 					Pattern accessTokenPattern = Pattern.compile("\"access_token\":\"(.+?)\"");
 					Matcher accessTokenMatcher = accessTokenPattern.matcher(responseStr);
 					if (accessTokenMatcher.find()) {
 						String accessToken = accessTokenMatcher.group(1);
-						logger.trace(String.format("{\"extractedToken\": \"%s\"}", accessToken));
 
 						String defaultScope = getConfig().getDefaultScope();
 						Map<String, String> informationMap = new HashMap<>();
@@ -549,10 +545,10 @@ public abstract class AbstractOAuth2IdentityProvider<C extends OAuth2IdentityPro
 										federatedIdentity.setFirstName(name);
 										federatedIdentity.setLastName(lastName);
 									}
-									logger.infov("User with TCKN: {0} logged in", kimlikNo);
 									return callback.authenticated(federatedIdentity);
 								} else {
 									logger.errorv("Unable to parse first name or last name");
+									status = Status.BAD_REQUEST;
 									errorMessage = "Sistemde oluşan bir hata nedeniyle işleminizi gerçekleştiremiyoruz, lütfen daha sonra tekrar deneyiniz.(001)";
 								}
 							} else {
@@ -577,7 +573,7 @@ public abstract class AbstractOAuth2IdentityProvider<C extends OAuth2IdentityPro
 			event.event(EventType.LOGIN);
 			event.error(Errors.IDENTITY_PROVIDER_LOGIN_FAILURE);
 			return ErrorPage
-					.error(session, null, Response.Status.OK, errorMessage);
+					.error(session, null, status, errorMessage);
 		}
 
 		private String prepareInformation(String accessToken, Map<String, String> informationMap,
@@ -591,7 +587,6 @@ public abstract class AbstractOAuth2IdentityProvider<C extends OAuth2IdentityPro
 						.param("clientId", getConfig().getClientId())
 						.param("resourceId", "1")
 						.param("kapsam", scope);
-				logger.trace(String.format("{\"edevletRequest\": %s}", request.asString()));
 				String edevletResponse = executeRequest(edevletUrl, request).asString();
 				logger.trace(String.format("{\"gotUserData\": %s}", edevletResponse));
 				Pattern resultDescriptionPattern = Pattern.compile("\"sonucAciklamasi\":\"(.+?)\"");
@@ -607,13 +602,11 @@ public abstract class AbstractOAuth2IdentityProvider<C extends OAuth2IdentityPro
 						Matcher lastNameMatcher = lastNamePattern.matcher(edevletResponse);
 						if (tcknMatcher.find()) {
 							String kimlikNo = tcknMatcher.group(1);
-							logger.trace(String.format("{\"extractedTckn\": \"%s\"}", kimlikNo));
 							informationMap.put("tckn", kimlikNo);
 						}
 						if (firstNameMatcher.find() && lastNameMatcher.find()) {
 							String name = firstNameMatcher.group(1);
 							String lastName = lastNameMatcher.group(1);
-							logger.trace(String.format("{\"name\": \"%s\", \"lastName\": \"%s\"}", name, lastName));
 							informationMap.put("name", name);
 							informationMap.put("lastName", lastName);
 						}
@@ -660,9 +653,8 @@ public abstract class AbstractOAuth2IdentityProvider<C extends OAuth2IdentityPro
 
 		public SimpleHttp generateTokenRequest(String authorizationCode) {
 			KeycloakContext context = session.getContext();
-//			String redirectUrl = Urls.identityProviderAuthnResponse(context.getUri().getBaseUri(),
-//					getConfig().getAlias(), context.getRealm().getName()).toString();
-			String redirectUrl = "https://giris.stage.iys.org.tr/auth/realms/app_iys/broker/edevlet/endpoint";
+			String redirectUrl = Urls.identityProviderAuthnResponse(context.getUri().getBaseUri(),
+					getConfig().getAlias(), context.getRealm().getName()).toString();
 			try (VaultStringSecret vaultStringSecret =
 					     session.vault().getStringSecret(getConfig().getClientSecret())) {
 				String secret = clientRealm.equals("citizen") ? citizenClientSecret :clientSecret;
