@@ -577,7 +577,7 @@ public abstract class AbstractOAuth2IdentityProvider<C extends OAuth2IdentityPro
 			event.event(EventType.LOGIN);
 			event.error(Errors.IDENTITY_PROVIDER_LOGIN_FAILURE);
 			return ErrorPage
-					.error(session, null, Response.Status.BAD_GATEWAY, errorMessage);
+					.error(session, null, Response.Status.OK, errorMessage);
 		}
 
 		private String prepareInformation(String accessToken, Map<String, String> informationMap,
