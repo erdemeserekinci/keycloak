@@ -481,7 +481,6 @@ public abstract class AbstractOAuth2IdentityProvider<C extends OAuth2IdentityPro
 				@QueryParam(AbstractOAuth2IdentityProvider.OAUTH2_PARAMETER_CODE) String authorizationCode,
 				@QueryParam(OAuth2Constants.ERROR) String error) {
 			String errorMessage = Messages.IDENTITY_PROVIDER_UNEXPECTED_ERROR;
-			Response.Status status = Status.INTERNAL_SERVER_ERROR;
 			if (error != null) {
 				logger.error(error + " for broker login " + getConfig().getProviderId());
 				if (error.equals(ACCESS_DENIED)) {
@@ -548,7 +547,6 @@ public abstract class AbstractOAuth2IdentityProvider<C extends OAuth2IdentityPro
 									return callback.authenticated(federatedIdentity);
 								} else {
 									logger.errorv("Unable to parse first name or last name");
-									status = Status.OK;
 									errorMessage = "Sistemde oluşan bir hata nedeniyle işleminizi gerçekleştiremiyoruz, lütfen daha sonra tekrar deneyiniz.(001)";
 								}
 							} else {
@@ -573,7 +571,7 @@ public abstract class AbstractOAuth2IdentityProvider<C extends OAuth2IdentityPro
 			event.event(EventType.LOGIN);
 			event.error(Errors.IDENTITY_PROVIDER_LOGIN_FAILURE);
 			return ErrorPage
-					.error(session, null, status, errorMessage);
+					.error(session, null, Status.OK, errorMessage);
 		}
 
 		private String prepareInformation(String accessToken, Map<String, String> informationMap,
