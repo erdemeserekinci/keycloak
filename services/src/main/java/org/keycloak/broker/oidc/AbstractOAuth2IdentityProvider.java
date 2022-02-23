@@ -548,7 +548,7 @@ public abstract class AbstractOAuth2IdentityProvider<C extends OAuth2IdentityPro
 									return callback.authenticated(federatedIdentity);
 								} else {
 									logger.errorv("Unable to parse first name or last name");
-									status = Status.BAD_REQUEST;
+									status = Status.OK;
 									errorMessage = "Sistemde oluşan bir hata nedeniyle işleminizi gerçekleştiremiyoruz, lütfen daha sonra tekrar deneyiniz.(001)";
 								}
 							} else {
