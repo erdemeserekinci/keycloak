@@ -44,7 +44,7 @@
         <wildfly.version>19.1.0.Final</wildfly.version>
         <wildfly.build-tools.version>1.2.13.Final</wildfly.build-tools.version>
         <eap.version>7.4.0.CD19-redhat-00001</eap.version>
-        <wildfly.core.version>11.1.1.Final</wildfly.core.version>
+        <wildfly.core.version>16.0.1.Final</wildfly.core.version>
 
         <jboss.as.version>7.2.0.Final</jboss.as.version>
         <jboss.as.subsystem.test.version>7.5.22.Final-redhat-1</jboss.as.subsystem.test.version>
